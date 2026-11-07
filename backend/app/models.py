@@ -24,7 +24,7 @@ class User(Base):
 class Snapshot(Base):
     __tablename__ = "snapshots"
     id: Mapped[int] = mapped_column(primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     data: Mapped[dict] = mapped_column(Json)
     analysis: Mapped[dict] = mapped_column(Json)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
@@ -33,7 +33,7 @@ class Snapshot(Base):
 class City(Base):
     __tablename__ = "cities"
     id: Mapped[int] = mapped_column(primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), unique=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), unique=True)
     username: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(80))
     seed: Mapped[int] = mapped_column(Integer)
@@ -45,7 +45,7 @@ class City(Base):
 
 class Banner(Base):
     __tablename__ = "banners"
-    city_id: Mapped[int] = mapped_column(ForeignKey("cities.id"), primary_key=True)
+    city_id: Mapped[int] = mapped_column(ForeignKey("cities.id", ondelete="CASCADE"), primary_key=True)
     version: Mapped[int] = mapped_column(Integer)
     png: Mapped[bytes] = mapped_column(LargeBinary)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
@@ -56,7 +56,7 @@ class Ledger(Base):
     __tablename__ = "ledger"
     __table_args__ = (UniqueConstraint("user_id", "idem_key"),)
     id: Mapped[int] = mapped_column(primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     resource: Mapped[str] = mapped_column(String(16))
     amount: Mapped[int] = mapped_column(Integer)
     source: Mapped[str] = mapped_column(String(120))
