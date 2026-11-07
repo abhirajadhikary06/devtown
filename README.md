@@ -1,89 +1,526 @@
 # DevTown
 
-GitHub-powered voxel city builder with a public README banner (1734 × 574 PNG, shown at ~514 × 170).
+**A GitHub-powered voxel city builder that transforms your GitHub activity, repositories, and open-source contributions into a living 3D city.**
 
-## Run it
+DevTown turns your developer profile into a voxel-based city. Every repository, commit, pull request, technology, and collaboration contributes to the development of your virtual town.
+
+Generate a personalized city, customize its layout, explore the community world, and showcase your developer journey through a dynamic README banner.
+
+---
+
+## Getting Started
+
+### Prerequisites
+
+- Python 3.10+
+- Node.js and npm
+- Git
+
+### 1. Clone the Repository
 
 ```bash
-# backend (SQLite in dev, tables auto-created)
-cd backend && pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
-
-# frontend (proxies /api to :8000)
-cd frontend && npm install && npm run dev      # http://localhost:5173
+git clone <repository-url>
+cd devtown
 ```
 
-The demo city (`/u/demo`, `/api/banners/demo.png`) works with no configuration.
-To enable "Connect GitHub", create a GitHub OAuth App (callback `http://localhost:5173/api/auth/github/callback`)
-and set `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` in `backend/.env` (see `.env.example`).
-Production: Neon PostgreSQL + `alembic upgrade head` (the backend container runs this on startup), and serve the SPA with a fallback to
-`index.html` so `/@username` resolves. Set `PUBLIC_BASE_URL` to your domain; it is used in the copied Markdown.
-Tests: `cd backend && pytest`.
+### 2. Start the Backend
 
-### Production deployment
+```bash
+cd backend
+pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8000
+```
 
-Use Docker Compose to run the backend container. PostgreSQL is hosted by Neon; the Compose file intentionally does
-not start a local database service. Configure `backend/.env`'s `DATABASE_URL` with Neon's pooled connection string
-(`NEON_DATABASE_URL` is not read by the application).
-The existing `backend/Dockerfile` runs `alembic upgrade head` before starting Uvicorn.
-Deploy `frontend` as a Vite site on Netlify and proxy `/api/*` to the Render backend so the existing relative API
-URLs and GitHub OAuth cookies continue to work. Add the `/api/*` rewrite in Netlify after Render gives you the
-backend URL; the committed `netlify.toml` contains the SPA fallback. Set `FRONTEND_URL`, `PUBLIC_BASE_URL`,
-`COOKIE_SECURE=true`, and the production secrets in Render. The GitHub OAuth callback must be
-`https://<api-domain>/api/auth/github/callback`.
+The development environment uses SQLite, with database tables created automatically.
 
-Lighting supports Auto, Day, Dusk, and Night. Auto stores the user's IANA timezone and changes the studio and
-banner between day (06:00-18:00), dusk (18:00-21:00), and night. README banner responses expose the resolved lighting mode and a mode-specific versioned preview URL. The copied
-Markdown includes that mode and revision, so manually selecting Night or Dusk is reflected immediately, while Auto
-gets a new URL whenever the user's local-time lighting period changes.
-The Community world renders every saved city as a 3D plot arranged beside the other plots.
-After GitHub analysis, new accounts default to an automatically placed starter town based on the profile plan.
-Users can choose manual setup instead and place buildings themselves.
-In the Studio, **Auto Build town** deliberately clears the current layout and rebuilds it from scratch using the
-coins and materials currently available. It favors the highest affordable population density, keeps profile-specific
-buildings as tie-breakers, preserves existing trees and other free decorations, and does not spend energy or reputation.
-Building costs are intentionally relaxed so smaller accounts can still create a populated town. The action is confirmed
-before it runs.
-Users may optionally enable **Scheduled Auto Build**. The backend checks opted-in towns in-process every 30 seconds
-and rebuilds at 06:00, 18:00, and 21:00 in the user's timezone, with automatic lighting and a new banner revision.
-This is best-effort: Render restarts and sleeping instances can skip a transition, and no external cron service is used.
+### 3. Start the Frontend
 
-## Architecture (modular monolith)
+Open another terminal:
 
-| Concern | Where |
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+The frontend runs at:
+
+```text
+http://localhost:5173
+```
+
+Vite proxies `/api` requests to the backend running on port `8000`.
+
+### 4. Explore the Demo
+
+The demo environment works without any additional configuration.
+
+- **Demo City:** `/u/demo`
+- **Demo README Banner:** `/api/banners/demo.png`
+
+### 5. Configure GitHub OAuth (Optional)
+
+To enable the **Connect GitHub** functionality:
+
+1. Create a GitHub OAuth App.
+2. Configure the authorization callback URL:
+
+   ```text
+   http://localhost:5173/api/auth/github/callback
+   ```
+
+3. Add the credentials to `backend/.env`:
+
+   ```env
+   GITHUB_CLIENT_ID=your_client_id
+   GITHUB_CLIENT_SECRET=your_client_secret
+   ```
+
+Refer to `backend/.env.example` for the available configuration options.
+
+### 6. Run Tests
+
+```bash
+cd backend
+pytest
+```
+
+---
+
+## Production Deployment
+
+DevTown uses a containerized backend, Neon PostgreSQL for persistence, and Netlify for frontend hosting.
+
+### Deployment Architecture
+
+| Component | Platform / Technology |
 |---|---|
-| GitHub ingestion (GraphQL + REST), verified/inferred/unavailable classification | `backend/app/github/ingest.py` |
-| Technology catalogue (extend by editing JSON) | `backend/app/data/technologies.json`, `github/techs.py` |
-| Identity / activity / community engines + building plan rules | `backend/app/mapping/engine.py` |
-| Rewards: saturating caps, idempotent ledger deltas | `backend/app/economy/rewards.py`, `api/services.py` |
-| Deterministic chunked terrain + starter placement | `backend/app/world/generator.py` |
-| Building catalogue (one line per building) | `backend/app/world/catalogue.py` |
-| Server-side banner camera | `backend/app/banner/renderer.py` |
-| Persistence / edits / banner cache | `models.py`, `api/services.py`, `alembic/` |
-| Voxel renderer + studio UI | `frontend/src/components/CityCanvas.tsx`, `pages/` |
+| Frontend | Netlify (Vite SPA) |
+| Backend | Docker + Render |
+| Database | Neon PostgreSQL |
+| Database Migrations | Alembic |
+| Authentication | GitHub OAuth |
 
-Persisted city state = seed + generation version + claimed chunks + placed items. Terrain is regenerated
-deterministically (same login + seed + generation version → same starter city). Re-syncing GitHub never overwrites
-user edits; it only widens unlocks, level and resources.
+### Backend Deployment
 
-## Banner
-`GET /api/banners/{username}.png` is public. `?v={version}` is immutable-cached; without it the response is
-`max-age=300`. Every edit bumps `city.version` and re-renders in the background; the PNG is stored per version.
-Unknown users get a placeholder PNG with status 404 so README embeds never show a broken image.
+1. Deploy the existing `backend/Dockerfile` using Render.
+2. Configure the production environment variables in Render.
+3. Set `DATABASE_URL` to Neon's pooled PostgreSQL connection string.
 
-## Known gaps vs. the spec (read before relying on it)
-- **GitHub ingestion has not been run against the live API.** The parser is unit-tested on synthetic payloads; the
-  GraphQL query is syntax-balanced but unverified against GitHub's schema/cost limits. Expect to tune field names.
-- Buildings are procedural instanced boxes, not GLB/GLTF assets. The banner uses a Pillow isometric renderer rather
-  than headless WebGL, so it matches the studio's look but is not pixel-identical.
-- Mapped with real logic: languages, technologies, commits/consistency, PRs, reviews, issues, discussions, OSS,
-  repos, stars/forks, releases, docs/tests/security files, collaboration. Only coarse versions exist for: branch
-  roads (no road network changes; branches/tags only appear as markers and a logistics depot), rivers (one river),
-  parallel routes, "connected neighbourhoods".
-- Unavailable without extra scopes or data: signed commits, code-scanning alerts, packages/containers, review
-  comments, approved PRs, scheduled workflows, maintainer status for non-self lookups. They earn nothing.
-- Only public data is read (`read:user` scope). Public events cover ~90 days, so push/branch metrics are "inferred".
-- Sync runs inline in the request; move to a worker for large accounts. No rate-limit backoff beyond reporting.
-- The studio supports build / demolish / rotate-before-placing / expand / rename. There is no drag-to-move of
-  existing items in the UI (the `PATCH /me/city/items/{id}` endpoint exists).
-- The OAuth flow, Postgres/Alembic path and Docker files are written but untested end-to-end here (Alembic upgrade was verified on SQLite).
+   ```env
+   DATABASE_URL=your_neon_pooled_connection_string
+   ```
+
+   **Note:** The application reads `DATABASE_URL`, not `NEON_DATABASE_URL`.
+
+4. The existing Dockerfile automatically runs:
+
+   ```bash
+   alembic upgrade head
+   ```
+
+   before starting Uvicorn.
+
+5. Configure the following production variables:
+
+   ```env
+   FRONTEND_URL=https://your-frontend-domain
+   PUBLIC_BASE_URL=https://your-frontend-domain
+   COOKIE_SECURE=true
+
+   GITHUB_CLIENT_ID=your_client_id
+   GITHUB_CLIENT_SECRET=your_client_secret
+   DATABASE_URL=your_neon_pooled_connection_string
+   ```
+
+### Frontend Deployment
+
+1. Import the `frontend` directory into Netlify as a Vite project.
+2. Configure the build and publish settings.
+3. Once Render provides the backend URL, add an `/api/*` rewrite to proxy requests to the backend.
+
+   Example:
+
+   ```text
+   /api/*  https://your-render-backend.onrender.com/api/:splat  200
+   ```
+
+4. Retain the existing SPA fallback configuration in `netlify.toml`.
+
+The API proxy preserves relative API requests and allows GitHub OAuth cookies to work across the frontend and backend deployment.
+
+### GitHub OAuth Callback
+
+Update the callback URL in your production GitHub OAuth App:
+
+```text
+https://<api-domain>/api/auth/github/callback
+```
+
+### Production Notes
+
+- PostgreSQL is hosted externally on Neon; Docker Compose intentionally does not provision a local database.
+- The backend container executes Alembic migrations during startup.
+- The frontend must support SPA fallback routing so routes such as `/@username` resolve correctly.
+- `PUBLIC_BASE_URL` determines the domain used in the generated README Markdown.
+
+---
+
+## Core Features
+
+### 1. GitHub-Powered City Generation
+
+DevTown analyzes publicly available GitHub profile information and translates developer activity into a personalized voxel city.
+
+The mapping engine considers:
+
+- Programming languages and technologies.
+- Commits and contribution consistency.
+- Repositories, stars, and forks.
+- Pull requests, reviews, and issues.
+- Discussions and open-source contributions.
+- Releases, documentation, tests, and security-related files.
+- Collaboration and other developer activity.
+
+New users receive an automatically generated starter town based on their GitHub profile. Alternatively, they can choose manual setup and construct their city themselves.
+
+### 2. Interactive City Studio
+
+The Studio provides an environment to customize and expand your voxel city.
+
+Supported operations include:
+
+- Building and demolishing structures.
+- Rotating buildings before placement.
+- Expanding the city.
+- Renaming the city.
+- Preserving existing layouts across GitHub synchronization.
+
+### 3. Auto Build Town
+
+The **Auto Build town** feature automatically reconstructs the city using the resources currently available.
+
+Its placement strategy:
+
+- Prioritizes the highest affordable population density.
+- Uses profile-specific buildings as tie-breakers.
+- Preserves existing trees and other free decorations.
+- Does not consume energy or reputation.
+- Uses relaxed building costs to support smaller accounts.
+
+**Important:** Auto Build deliberately clears the existing layout and rebuilds it from scratch. The operation requires confirmation before execution.
+
+### 4. Scheduled Auto Build
+
+Users can optionally enable Scheduled Auto Build to automatically reconstruct their towns.
+
+The backend checks opted-in towns every 30 seconds and triggers rebuilding at:
+
+| Time | Event |
+|---|---|
+| 06:00 | Day transition |
+| 18:00 | Dusk transition |
+| 21:00 | Night transition |
+
+All scheduled transitions follow the user's configured IANA timezone.
+
+Scheduled execution is best-effort. Since scheduling runs in-process, Render restarts or sleeping instances can cause transitions to be skipped. No external cron service is required.
+
+### 5. Community World
+
+The Community world displays saved user cities as individual 3D plots arranged alongside one another.
+
+This creates a shared environment where developers can explore each other's GitHub-powered cities.
+
+### 6. Dynamic Lighting System
+
+DevTown supports four lighting modes:
+
+- **Auto** – Automatically determines lighting based on the user's local timezone.
+- **Day** – Daytime lighting.
+- **Dusk** – Evening lighting.
+- **Night** – Nighttime lighting.
+
+Auto mode uses the following schedule:
+
+| Local Time | Lighting |
+|---|---|
+| 06:00–18:00 | Day |
+| 18:00–21:00 | Dusk |
+| 21:00–06:00 | Night |
+
+The user's IANA timezone is stored to ensure accurate local-time transitions.
+
+---
+
+## README Banner
+
+DevTown generates a personalized PNG banner that developers can embed directly into their GitHub profile README.
+
+**Banner specifications**
+
+| Property | Value |
+|---|---|
+| Endpoint | `GET /api/banners/{username}.png` |
+| Image format | PNG |
+| Original dimensions | 1734 × 574 px |
+| Display dimensions | Approximately 514 × 170 px |
+| Accessibility | Public endpoint |
+| Rendering | Server-side Pillow isometric renderer |
+
+### Versioned Banner Caching
+
+The banner endpoint supports immutable version-based caching.
+
+```text
+/api/banners/{username}.png?v={version}
+```
+
+- Versioned requests use immutable caching.
+- Requests without a version use `max-age=300`.
+- Every city edit increments `city.version`.
+- Updated banners are rendered in the background and stored per version.
+- Unknown users receive a placeholder PNG with HTTP 404, preventing broken README image embeds.
+
+### Lighting-Aware Banner URLs
+
+Banner responses expose the resolved lighting mode and a mode-specific versioned preview URL.
+
+The generated Markdown includes both the lighting mode and revision.
+
+This ensures:
+
+- Manually selecting Night or Dusk updates the banner immediately.
+- Auto mode generates a new URL whenever the local lighting period changes.
+- Previously cached banner versions remain immutable.
+
+---
+
+## Architecture
+
+DevTown follows a **Modular Monolith Architecture**, separating core functionality into independent domain modules while maintaining a single backend application.
+
+### Backend Architecture
+
+| Module | Responsibility | Implementation |
+|---|---|---|
+| GitHub Ingestion | GraphQL and REST data extraction, classification | `github/ingest.py` |
+| Technology Catalogue | Technology detection and mapping | `data/technologies.json`, `github/techs.py` |
+| Mapping Engine | Identity, activity, community, and building rules | `mapping/engine.py` |
+| Economy Engine | Rewards, saturating caps, idempotent ledger deltas | `economy/rewards.py`, `api/services.py` |
+| World Generator | Deterministic terrain and starter placement | `world/generator.py` |
+| Building Catalogue | Building definitions and costs | `world/catalogue.py` |
+| Banner Renderer | Server-side isometric banner generation | `banner/renderer.py` |
+| Persistence Layer | Database models, city edits, banner caching | `models.py`, `api/services.py`, `alembic/` |
+| Frontend Renderer | Voxel rendering and Studio interface | `CityCanvas.tsx`, `pages/` |
+
+### Frontend
+
+The frontend is built with React, TypeScript, and Vite.
+
+The primary voxel rendering component is:
+
+```text
+frontend/src/components/CityCanvas.tsx
+```
+
+It handles the interactive city visualization, while the page components provide the surrounding Studio and community interfaces.
+
+---
+
+## World Generation and Persistence
+
+DevTown uses deterministic, chunk-based terrain generation to ensure that cities remain consistent across sessions.
+
+### Persisted City State
+
+The city state is represented by:
+
+- World seed.
+- Generation version.
+- Claimed terrain chunks.
+- Placed building and decoration items.
+
+Terrain is regenerated deterministically using the same login identity, seed, and generation version.
+
+This means:
+
+```text
+Same Login + Same Seed + Same Generation Version
+                    ↓
+             Same Starter City
+```
+
+### GitHub Re-Synchronization
+
+Re-syncing GitHub does not overwrite existing user modifications.
+
+Instead, synchronization only expands:
+
+- Unlocks.
+- Levels.
+- Available resources.
+
+This preserves the user's existing city layout while allowing progression as their GitHub activity evolves.
+
+---
+
+## Known Limitations
+
+The following limitations are important to understand before relying on the implementation in production.
+
+### 1. GitHub API Integration
+
+- Live GitHub ingestion has not yet been executed against the actual API.
+- The parser is unit-tested using synthetic payloads.
+- The GraphQL query is syntax-balanced but has not been verified against GitHub's actual schema or query-cost limits.
+- Field names and query structure may require adjustments during live integration.
+
+### 2. Rendering and Assets
+
+- Buildings currently use procedural instanced boxes rather than GLB/GLTF assets.
+- README banners are generated using a Pillow-based isometric renderer.
+- The banner renderer approximates the Studio's visual appearance but is not pixel-identical to the WebGL-style Studio renderer.
+
+### 3. Partially Implemented Mapping
+
+The following features have real mapping logic:
+
+- Languages and technologies.
+- Commits and contribution consistency.
+- Pull requests, reviews, and issues.
+- Discussions and open-source contributions.
+- Repositories, stars, and forks.
+- Releases, documentation, tests, and security files.
+- Collaboration.
+
+The following features currently have coarse implementations:
+
+- Branch roads: branches and tags appear as markers, alongside a logistics depot; no actual road network changes.
+- Rivers: a single river.
+- Parallel routes.
+- Connected neighbourhoods.
+
+### 4. GitHub Data Availability
+
+Some metrics are unavailable because they require additional permissions, scopes, or data sources.
+
+These include:
+
+- Signed commits.
+- Code-scanning alerts.
+- Packages and containers.
+- Review comments.
+- Approved pull requests.
+- Scheduled workflows.
+- Maintainer status for non-self lookups.
+
+Unavailable metrics do not contribute rewards.
+
+DevTown currently accesses public GitHub data using the `read:user` scope.
+
+Public GitHub events cover approximately 90 days, meaning push and branch metrics are inferred rather than comprehensively measured.
+
+### 5. Synchronization and Rate Limits
+
+- GitHub synchronization currently executes inline within the request lifecycle.
+- Large accounts may require background worker processing.
+- Rate-limit backoff is not implemented beyond reporting the relevant errors.
+
+### 6. Studio Interaction
+
+The Studio currently supports:
+
+- Build.
+- Demolish.
+- Rotate before placing.
+- Expand.
+- Rename.
+
+Drag-to-move functionality for already placed items is not yet available in the UI.
+
+However, the corresponding backend endpoint exists:
+
+```http
+PATCH /me/city/items/{id}
+```
+
+### 7. Deployment Verification
+
+The following components have been implemented but have not been fully verified end-to-end:
+
+- GitHub OAuth flow.
+- PostgreSQL production configuration.
+- Alembic migration workflow.
+- Docker-based deployment.
+
+Alembic migrations have been verified against SQLite, but the complete production PostgreSQL deployment path remains untested.
+
+---
+
+## Technology Stack
+
+| Layer | Technologies |
+|---|---|
+| Frontend | React, TypeScript, Vite |
+| 3D Visualization | Voxel-based procedural rendering |
+| Backend | Python, FastAPI |
+| Database | SQLite (Development), PostgreSQL (Production) |
+| ORM / Migrations | SQLAlchemy, Alembic |
+| GitHub Integration | GitHub GraphQL API, REST API, OAuth |
+| Banner Generation | Pillow |
+| Deployment | Docker, Docker Compose, Render, Netlify |
+| Database Hosting | Neon PostgreSQL |
+
+---
+
+## Project Structure
+
+```text
+devtown/
+├── backend/
+│   ├── app/
+│   │   ├── github/
+│   │   ├── mapping/
+│   │   ├── economy/
+│   │   ├── world/
+│   │   ├── banner/
+│   │   ├── api/
+│   │   ├── data/
+│   │   └── main.py
+│   ├── alembic/
+│   ├── tests/
+│   ├── Dockerfile
+│   ├── requirements.txt
+│   └── .env.example
+│
+├── frontend/
+│   ├── src/
+│   │   ├── components/
+│   │   └── pages/
+│   ├── package.json
+│   └── vite.config.ts
+│
+├── docker-compose.yml
+└── netlify.toml
+```
+
+---
+
+## Testing
+
+Backend tests are written using pytest.
+
+Run the test suite:
+
+```bash
+cd backend
+pytest
+```
+
+### License
+See the repository's LICENSE file for licensing information.
+
+## License
+
+See the repository's `LICENSE` file for licensing information.
