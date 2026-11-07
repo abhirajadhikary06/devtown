@@ -71,6 +71,22 @@ def test_grants_are_idempotent_and_never_negative():
     assert rewards.grant_deltas(ents, {("metric:commits.total", "energy"): 50}) == []
 
 
+def test_reward_recalculation_reduces_old_grants_without_touching_spending(client):
+    with SessionLocal() as db:
+        user = db.query(User).filter_by(login="alice").one()
+        db.add(Ledger(user_id=user.id, resource="coins", amount=400, source="welcome",
+                      idem_key="grant:welcome:coins:400:legacy", reason="old rule"))
+        db.add(Ledger(user_id=user.id, resource="coins", amount=-25, source="spend",
+                      idem_key="spend:test", reason="test build"))
+        db.commit()
+        snapshot = {"metrics": {"commits.total": {"v": 500, "s": "verified"}}}
+        svc.sync_grants(db, user.id, snapshot)
+        db.commit()
+        assert svc.balances(db, user.id)["coins"] < 630
+        assert db.query(Ledger).filter_by(user_id=user.id, idem_key="spend:test").one().amount == -25
+        assert db.query(Ledger).filter(Ledger.user_id == user.id, Ledger.idem_key.like("reconcile:%")).count() >= 1
+
+
 def test_tech_detection_uses_evidence():
     out = detect([{"name": "r", "topics": ["PyTorch"], "root_files": ["Dockerfile"], "manifests": {"requirements.txt": "fastapi==0.1\nredis\n"}}])
     ids = {t["id"] for t in out}

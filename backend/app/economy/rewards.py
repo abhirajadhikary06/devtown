@@ -9,8 +9,8 @@ RULES = [
     ("commits.total", "energy", 400, 1500), ("days.active", "energy", 300, 400), ("streak.longest", "energy", 60, 60),
     ("weeks.active", "energy", 120, 150), ("pushes.recent", "energy", 20, 100),
     # Small, gradual construction income from ordinary profile activity.
-    ("commits.total", "coins", 180, 1000), ("days.active", "coins", 120, 250),
-    ("prs.merged", "coins", 200, 50),
+    ("commits.total", "coins", 140, 1000), ("days.active", "coins", 90, 250),
+    ("prs.merged", "coins", 160, 50),
     ("repos.owned", "materials", 300, 20), ("prs.merged", "materials", 400, 150), ("releases.total", "materials", 200, 30),
     ("repos.with_ci", "materials", 80, 10), ("repos.large", "materials", 100, 5), ("repos.with_tests", "materials", 60, 8),
     ("external.prs_merged", "reputation", 500, 50), ("external.repos", "reputation", 200, 15),
@@ -38,8 +38,8 @@ def entitlements(snap) -> list[dict]:
             out.append({"source": f"achievement:{aid}", "resource": "coins", "total": coins})
     # every resource needs a modest baseline so a brand-new city can build immediately
     # Enough for several starter structures without making costs meaningless.
-    out.append({"source": "welcome", "resource": "coins", "total": 400})
-    out.append({"source": "welcome", "resource": "materials", "total": 200})
+    out.append({"source": "welcome", "resource": "coins", "total": 200})
+    out.append({"source": "welcome", "resource": "materials", "total": 100})
     return out
 
 

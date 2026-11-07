@@ -98,12 +98,30 @@ def balances(db: Session, user_id: int) -> dict:
 
 
 def sync_grants(db: Session, user_id: int, snapshot: dict):
+    entitlements = rewards.entitlements(snapshot)
     granted: dict = {}
     for src, res, tot in db.execute(select(Ledger.source, Ledger.resource, func.sum(Ledger.amount)).where(
-            Ledger.user_id == user_id, Ledger.amount > 0, Ledger.idem_key.like("grant:%")).group_by(Ledger.source, Ledger.resource)):
+            Ledger.user_id == user_id,
+            (Ledger.idem_key.like("grant:%") | Ledger.idem_key.like("reconcile:%"))
+        ).group_by(Ledger.source, Ledger.resource)):
+        granted[(src, res)] = int(tot)
+    desired = {(e["source"], e["resource"]): e["total"] for e in entitlements}
+    for key, current in granted.items():
+        target = desired.get(key, 0)
+        if current > target:
+            src, res = key
+            db.add(Ledger(user_id=user_id, resource=res, amount=target - current,
+                          source=src, idem_key=f"reconcile:{src}:{res}:{target}",
+                          reason="recalculated profile rewards"))
+    db.flush()
+    granted = {}
+    for src, res, tot in db.execute(select(Ledger.source, Ledger.resource, func.sum(Ledger.amount)).where(
+            Ledger.user_id == user_id,
+            (Ledger.idem_key.like("grant:%") | Ledger.idem_key.like("reconcile:%"))
+        ).group_by(Ledger.source, Ledger.resource)):
         granted[(src, res)] = int(tot)
     n = 0
-    for row in rewards.grant_deltas(rewards.entitlements(snapshot), granted):
+    for row in rewards.grant_deltas(entitlements, granted):
         exists = db.scalar(select(Ledger.id).where(Ledger.user_id == user_id, Ledger.idem_key == row["idem_key"]))
         if not exists:
             db.add(Ledger(user_id=user_id, **row))
