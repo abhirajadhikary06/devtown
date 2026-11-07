@@ -8,6 +8,11 @@
   to = "https://devtown-s5wz.onrender.com/api/:splat"
   status = 200
 
+[[headers]]
+  for = "/api/auth/*"
+  [headers.values]
+    Cache-Control = "no-store"
+
 [[redirects]]
   from = "/*"
   to = "/index.html"
