@@ -1,0 +1,21 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body { @apply bg-paper font-body text-ink antialiased; margin: 0; }
+  .community-world {
+    background-color: #a9c59e;
+    background-image: linear-gradient(90deg, transparent 0 46%, #68777b 46% 53%, transparent 53%), linear-gradient(0deg, transparent 0 46%, #68777b 46% 53%, transparent 53%);
+    background-size: 260px 230px;
+  }
+  .town-parcel-grid {
+    background-image: linear-gradient(90deg, #ffffff24 1px, transparent 1px), linear-gradient(#ffffff24 1px, transparent 1px);
+    background-size: 18px 18px;
+  }
+h1, h2, h3 { @apply font-display; }
+:focus-visible { outline: 3px solid #F2B134; outline-offset: 2px; }
+.btn { @apply inline-flex items-center justify-center rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors; }
+.btn-primary { @apply bg-ink text-paper hover:bg-plum; }
+.btn-accent { @apply bg-marigold text-ink hover:brightness-95; }
+.btn-ghost { @apply border border-ink/25 text-ink hover:bg-mist; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
