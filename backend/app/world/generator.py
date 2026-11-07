@@ -208,10 +208,12 @@ def place_starter(seed: int, plan: list[dict], unlocked_chunks, limit: int, ligh
     return items, deferred, nid
 
 
-def place_budgeted(seed: int, candidates: list[tuple[str, int]], unlocked_chunks: list[list[int]], coins: int, materials: int):
-    """Fill claimed land with the best affordable buildings, favoring population density."""
+def place_budgeted(seed: int, candidates: list[tuple[str, int]], unlocked_chunks: list[list[int]], coins: int,
+                   materials: int, initial_items: list[dict] | None = None):
+    """Fill claimed land using the best affordable population/resource trade-offs."""
     tm = TileMap(seed, unlocked_chunks)
-    items, spent, nid = [], {"coins": 0, "materials": 0}, 1
+    items = list(initial_items or [])
+    spent, nid = {"coins": 0, "materials": 0}, max((item["id"] for item in items), default=0) + 1
     xs = sorted({c[0] * CHUNK + i for c in tm.unlocked for i in range(CHUNK)})
     zs = sorted({c[1] * CHUNK + i for c in tm.unlocked for i in range(CHUNK)})
     remaining = list(candidates)
@@ -236,12 +238,15 @@ def place_budgeted(seed: int, candidates: list[tuple[str, int]], unlocked_chunks
                         if best is None or score < best[0]:
                             best = (score, x, z, rot)
             if best:
-                population = 3 if BUILDINGS[bt]["category"] == "residential" else 1
-                density = population / max(1, cost["coins"] + cost["materials"])
-                # Population density is the primary objective; profile priority
-                # breaks close ties without allowing expensive landmarks to
-                # crowd out many affordable homes.
-                options.append((density * 1000 + priority * 0.02, bt, best, cost))
+                category = BUILDINGS[bt]["category"]
+                population = {"residential": 10, "community": 7, "civic": 5}.get(category, 2)
+                # Normalize each cost by the resource that remains. The larger
+                # normalized cost is the bottleneck, so both resources constrain
+                # the decision instead of their raw values being added together.
+                coin_pressure = cost["coins"] / max(1, coins - spent["coins"])
+                material_pressure = cost["materials"] / max(1, materials - spent["materials"])
+                efficiency = population / max(coin_pressure, material_pressure)
+                options.append((efficiency + priority * 0.01, bt, best, cost))
         if not options:
             break
         _, bt, best, cost = max(options, key=lambda option: option[0])

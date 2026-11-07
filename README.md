@@ -41,7 +41,12 @@ After GitHub analysis, new accounts default to an automatically placed starter t
 Users can choose manual setup instead and place buildings themselves.
 In the Studio, **Auto Build town** deliberately clears the current layout and rebuilds it from scratch using the
 coins and materials currently available. It favors the highest affordable population density, keeps profile-specific
-buildings as tie-breakers, and does not spend energy or reputation. The action is confirmed before it runs.
+buildings as tie-breakers, preserves existing trees and other free decorations, and does not spend energy or reputation.
+Building costs are intentionally relaxed so smaller accounts can still create a populated town. The action is confirmed
+before it runs.
+Users may optionally enable **Scheduled Auto Build**. The backend checks opted-in towns in-process every 30 seconds
+and rebuilds at 06:00, 18:00, and 21:00 in the user's timezone, with automatic lighting and a new banner revision.
+This is best-effort: Render restarts and sleeping instances can skip a transition, and no external cron service is used.
 
 ## Architecture (modular monolith)
 

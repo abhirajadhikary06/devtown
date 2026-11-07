@@ -142,6 +142,7 @@ def profile(user: User = Depends(current_user), db: Session = Depends(get_db)):
 class LightingIn(BaseModel):
     mode: str = "auto"
     timezone: str = "UTC"
+    scheduled_auto_build: bool = False
 
 
 @router.patch("/me/lighting")
@@ -150,7 +151,8 @@ def update_lighting(b: LightingIn, user: User = Depends(current_user), db: Sessi
         raise HTTPException(422, "Lighting mode must be auto, day, dusk, or night")
     row = my_city(user, db)
     data = dict(row.data)
-    lighting = {"mode": b.mode, "timezone": b.timezone[:80]}
+    lighting = {"mode": "auto" if b.scheduled_auto_build else b.mode, "timezone": b.timezone[:80],
+                "scheduled_auto_build": b.scheduled_auto_build}
     if data.get("lighting") == lighting:
         return lighting
     data["lighting"] = lighting

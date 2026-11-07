@@ -19,6 +19,7 @@ from app.main import app
 from app.mapping.engine import analyse, val
 from app.models import City, Ledger, User
 from app.world import generator as gen
+from app.world.catalogue import FREE
 
 
 def test_generation_is_deterministic():
@@ -40,6 +41,12 @@ def test_no_overlap_and_only_buildable_tiles():
         for p in footprint(it["type"], it["x"], it["z"], it["rot"])[0]:
             assert p not in seen and tm.at(*p)[1] in (gen.GRASS, gen.SAND)
             seen.add(p)
+
+
+def test_budgeted_build_preserves_existing_trees():
+    tree = {"id": 7, "type": "tree", "x": 1, "z": 1, "rot": 0, "origin": "user"}
+    items, spent, _ = gen.place_budgeted(3, [("home", 1)], gen.STARTER_CHUNKS, 100, 100, [tree])
+    assert tree in items and spent["coins"] > 0
 
 
 def test_banner_exact_size():
@@ -143,7 +150,7 @@ def test_auto_build_replaces_layout_and_uses_available_resources(client):
     assert result.status_code == 200
     after = client.get("/api/cities/alice").json()
     assert after["version"] == before["version"] + 1
-    assert all(item["origin"] == "auto" for item in after["items"])
+    assert all(item["origin"] == "auto" or item["type"] in FREE for item in after["items"])
     assert result.json()["balances"]["coins"] <= 400
     assert result.json()["balances"]["materials"] <= 200
 

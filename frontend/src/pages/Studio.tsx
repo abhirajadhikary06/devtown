@@ -22,6 +22,7 @@ export default function Studio() {
   const [autoRotateView, setAutoRotateView] = useState(false);
   const [viewAngle, setViewAngle] = useState(45);
   const [lightingPreference, setLightingPreference] = useState<LightingPreference>("auto");
+  const [scheduledAutoBuild, setScheduledAutoBuild] = useState(false);
   const lightingMode: LightingMode = lightingPreference === "auto" ? automaticLighting() : lightingPreference;
   const [, refreshLighting] = useState(0);
   useEffect(() => { const timer = window.setInterval(() => refreshLighting((n) => n + 1), 60_000); return () => window.clearInterval(timer); }, []);
@@ -44,13 +45,21 @@ export default function Studio() {
 
   useEffect(() => {
     if (!city) return;
-    api<{ mode: LightingPreference; timezone: string }>("/me/lighting").then((p) => setLightingPreference(p.mode)).catch(() => {});
+    api<{ mode: LightingPreference; timezone: string; scheduled_auto_build?: boolean }>("/me/lighting").then((p) => {
+      setLightingPreference(p.mode); setScheduledAutoBuild(Boolean(p.scheduled_auto_build));
+    }).catch(() => {});
   }, [city]);
 
   const changeLighting = (mode: LightingPreference) => {
     setLightingPreference(mode);
     api("/me/lighting", { method: "PATCH", body: JSON.stringify({ mode, timezone: timezone() }) })
       .catch((e) => setMsg(`Could not save lighting: ${(e as Error).message}`));
+  };
+  const changeScheduledBuild = (enabled: boolean) => {
+    setScheduledAutoBuild(enabled);
+    api("/me/lighting", { method: "PATCH", body: JSON.stringify({
+      mode: enabled ? "auto" : lightingPreference, timezone: timezone(), scheduled_auto_build: enabled,
+    }) }).catch((e) => setMsg(`Could not save schedule: ${(e as Error).message}`));
   };
 
   useEffect(() => {
@@ -160,6 +169,10 @@ export default function Studio() {
               Auto rotate town: {autoRotateView ? "On" : "Off"}
             </button>
             <LightingPicker value={lightingPreference} onChange={changeLighting} />
+            <label className="flex cursor-pointer items-start gap-2 rounded-md bg-mist px-3 py-2 text-sm">
+              <input type="checkbox" checked={scheduledAutoBuild} onChange={(e) => changeScheduledBuild(e.target.checked)} />
+              <span><b>Scheduled Auto Build</b><span className="block text-xs text-ink/65">Rebuild at local day, dusk, and night start. This replaces the current layout.</span></span>
+            </label>
             <div className="flex items-center justify-between rounded-md bg-mist px-3 py-2 text-sm" aria-live="polite">
               <span>View direction</span>
               <span className="flex items-center gap-2"><span className="inline-block text-lg transition-transform" style={{ transform: `rotate(${viewAngle}deg)` }}>↑</span><b>{autoRotateView ? `Orbiting · ${viewAngle}°` : `${viewAngle}°`}</b></span>

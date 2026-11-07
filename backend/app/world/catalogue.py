@@ -124,8 +124,8 @@ for _line in _TABLE.strip().splitlines():
     w, d, h = int(w), int(d), int(h)
     free = bid in FREE
     BUILDINGS[bid] = dict(id=bid, name=name, category=cat, w=w, d=d, h=h, color=_color(cat, bid),
-                          coins=0 if free else 10 * w * d + 15 * h,
-                          materials=0 if free else 5 * w * d + 5 * h)
+                          coins=0 if free else 6 * w * d + 8 * h,
+                          materials=0 if free else 3 * w * d + 2 * h)
 BUILDINGS["road"]["coins"] = 2
 BUILDINGS["tree"]["coins"] = 1
 BUILDINGS["park"]["coins"] = 8
