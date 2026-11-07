@@ -47,17 +47,20 @@ def health():
 
 # ---------- auth (scope: read:user only; public data)
 @router.get("/auth/github/login")
-def login(request: Request):
+def login(request: Request, response: Response):
     if not settings.github_client_id:
         raise HTTPException(503, "GitHub OAuth is not configured on this server")
     state = secrets.token_urlsafe(16)
     request.session["state"] = state
+    response.headers["Cache-Control"] = "no-store"
     return RedirectResponse("https://github.com/login/oauth/authorize?" + urlencode(
-        {"client_id": settings.github_client_id, "scope": "read:user", "state": state}))
+        {"client_id": settings.github_client_id, "scope": "read:user", "state": state}),
+        headers={"Cache-Control": "no-store"})
 
 
 @router.get("/auth/github/callback")
-async def callback(request: Request, code: str, state: str, db: Session = Depends(get_db)):
+async def callback(request: Request, code: str, state: str, response: Response, db: Session = Depends(get_db)):
+    response.headers["Cache-Control"] = "no-store"
     if state != request.session.pop("state", None):
         raise HTTPException(400, "Invalid OAuth state")
     async with httpx.AsyncClient(timeout=20) as h:
@@ -72,7 +75,7 @@ async def callback(request: Request, code: str, state: str, db: Session = Depend
     db.add(u)
     db.commit()
     request.session["uid"] = u.id
-    return RedirectResponse(settings.frontend_url + "/studio")
+    return RedirectResponse(settings.frontend_url + "/studio", headers={"Cache-Control": "no-store"})
 
 
 @router.post("/auth/logout")
@@ -299,6 +302,17 @@ def expand(b: ExpandIn, bg: BackgroundTasks, user: User = Depends(current_user),
 def expansion(user: User = Depends(current_user), db: Session = Depends(get_db)):
     from ..economy.rewards import expansion_cost
     return expansion_cost(len(my_city(user, db).data["unlocked"]))
+
+
+@router.post("/me/city/auto-build")
+def auto_build_city(bg: BackgroundTasks, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    row = my_city(user, db)
+    s = db.scalar(select(Snapshot).where(Snapshot.user_id == user.id).order_by(Snapshot.id.desc()))
+    plan = s.analysis["plan"] if s else []
+    result = svc.auto_build(db, row, user.id, plan)
+    db.commit()
+    _after_edit(bg, row)
+    return {"version": row.version, **result}
 
 
 @router.patch("/me/city")

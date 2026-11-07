@@ -99,6 +99,17 @@ export default function Studio() {
     try { const r = await post<{ balances: Balances }>("/me/city/expand", { cx, cz }); setBal(r.balances); await load(login); setMsg("Land expanded."); }
     catch (e) { setMsg((e as Error).message); }
   };
+  const autoBuildTown = async () => {
+    if (!window.confirm("Auto Build will clear your current town and rebuild it using your available coins and materials. Continue?")) return;
+    setBusy(true); setMsg("");
+    try {
+      const r = await post<{ built: number; balances: Balances }>("/me/city/auto-build");
+      setBal(r.balances);
+      await load(login);
+      setMsg(`Auto-built ${r.built} structures using your available resources.`);
+    } catch (e) { setMsg((e as Error).message); }
+    setBusy(false);
+  };
   const rename = async (name: string) => { if (city && name.trim() && name !== city.name) { try { await api("/me/city", { method: "PATCH", body: JSON.stringify({ name }) }); setCity({ ...city, name }); } catch (e) { setMsg((e as Error).message); } } };
 
   if (state === "loading") return <div className="p-8">Loading your studio…</div>;
@@ -132,6 +143,7 @@ export default function Studio() {
         <div className="ml-auto flex flex-wrap items-center gap-2 text-sm">
           {RES.map(([k, l]) => <span key={k} className="rounded-md bg-mist px-2.5 py-1"><span className="text-ink/65">{l}</span> <b>{bal?.[k] ?? 0}</b></span>)}
           <button className="btn btn-ghost" onClick={() => setPanel(!panel)}>Developer profile</button>
+          <button className="btn btn-accent" onClick={autoBuildTown} disabled={busy}>Auto Build town</button>
           <button className="btn btn-ghost" onClick={analyze} disabled={busy}>{busy ? "Refreshing…" : "Refresh from GitHub"}</button>
           <Link className="btn btn-accent" to="/banner">README banner</Link>
         </div>

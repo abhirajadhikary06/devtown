@@ -133,8 +133,19 @@ def test_build_charges_resources_blocks_collisions_and_bumps_version(client):
     assert client.post("/api/me/city/items", json={"type": "home", "x": spot[0], "z": spot[1], "rot": 0}).status_code == 409
     assert client.post("/api/me/city/items", json={"type": "ai_lab", "x": spot[0], "z": spot[1], "rot": 0}).status_code == 409  # locked
     assert client.get("/api/cities/alice").json()["version"] == v0 + 1
-    banner = client.get(f"/api/me/banner").json()
+    banner = client.get("/api/me/banner").json()
     assert banner["markdown"].startswith("[![My DevTown](") and banner["markdown"].endswith("/@alice)")
+
+
+def test_auto_build_replaces_layout_and_uses_available_resources(client):
+    before = client.get("/api/cities/alice").json()
+    result = client.post("/api/me/city/auto-build")
+    assert result.status_code == 200
+    after = client.get("/api/cities/alice").json()
+    assert after["version"] == before["version"] + 1
+    assert all(item["origin"] == "auto" for item in after["items"])
+    assert result.json()["balances"]["coins"] <= 400
+    assert result.json()["balances"]["materials"] <= 200
 
 
 def test_expansion_requires_level_and_resources(client):

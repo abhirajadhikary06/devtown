@@ -29,6 +29,23 @@ def new_city_data(snapshot: dict, analysis: dict, seed: int, auto_build: bool = 
             "auto_build": auto_build}
 
 
+def auto_build(db: Session, row: City, user_id: int, plan: list[dict]) -> dict:
+    """Replace the layout with the densest affordable deterministic town."""
+    d = dict(row.data)
+    balance = balances(db, user_id)
+    priority = {entry["building"]: max(1, len(plan) - index) for index, entry in enumerate(plan)}
+    candidates = [
+        (b["id"], priority.get(b["id"], 1))
+        for b in BUILDINGS.values()
+        if b["id"] not in FREE and b["id"] in set(d["unlocks"]) | BASE_UNLOCKS
+    ]
+    items, spent, nid = gen.place_budgeted(row.seed, candidates, d["unlocked"], balance["coins"], balance["materials"])
+    spend(db, user_id, spent, "auto-build")
+    d["items"], d["next_id"], d["deferred"], d["auto_build"] = items, nid, [], True
+    _commit(row, d)
+    return {"built": len(items), "spent": spent, "balances": balances(db, user_id)}
+
+
 @lru_cache
 def demo_city() -> dict:
     snap = json.loads((Path(__file__).parent.parent / "data" / "demo_snapshot.json").read_text())

@@ -208,6 +208,50 @@ def place_starter(seed: int, plan: list[dict], unlocked_chunks, limit: int, ligh
     return items, deferred, nid
 
 
+def place_budgeted(seed: int, candidates: list[tuple[str, int]], unlocked_chunks: list[list[int]], coins: int, materials: int):
+    """Fill claimed land with the best affordable buildings, favoring population density."""
+    tm = TileMap(seed, unlocked_chunks)
+    items, spent, nid = [], {"coins": 0, "materials": 0}, 1
+    xs = sorted({c[0] * CHUNK + i for c in tm.unlocked for i in range(CHUNK)})
+    zs = sorted({c[1] * CHUNK + i for c in tm.unlocked for i in range(CHUNK)})
+    remaining = list(candidates)
+    for _ in range(256):
+        options = []
+        for bt, priority in remaining:
+            b = BUILDINGS[bt]
+            cost = {"coins": b["coins"], "materials": b["materials"]}
+            if spent["coins"] + cost["coins"] > coins or spent["materials"] + cost["materials"] > materials:
+                continue
+            best = None
+            for x in xs:
+                for z in zs:
+                    for rot in (0, 1):
+                        _, w, d = footprint(bt, x, z, rot)
+                        if (x % ROAD_SPACING) + w > ROAD_SPACING or (z % ROAD_SPACING) + d > ROAD_SPACING:
+                            continue
+                        if placement_error(tm, items, bt, x, z, rot) is not None:
+                            continue
+                        distance = math.hypot(x - CENTER[0], z - CENTER[1])
+                        score = distance + hash01(seed, x, z, nid) * 2
+                        if best is None or score < best[0]:
+                            best = (score, x, z, rot)
+            if best:
+                population = 3 if BUILDINGS[bt]["category"] == "residential" else 1
+                density = population / max(1, cost["coins"] + cost["materials"])
+                # Population density is the primary objective; profile priority
+                # breaks close ties without allowing expensive landmarks to
+                # crowd out many affordable homes.
+                options.append((density * 1000 + priority * 0.02, bt, best, cost))
+        if not options:
+            break
+        _, bt, best, cost = max(options, key=lambda option: option[0])
+        items.append({"id": nid, "type": bt, "x": best[1], "z": best[2], "rot": best[3], "origin": "auto"})
+        nid += 1
+        spent["coins"] += cost["coins"]
+        spent["materials"] += cost["materials"]
+    return items, spent, nid
+
+
 def neighbours(unlocked):
     s = {tuple(c) for c in unlocked}
     out = set()

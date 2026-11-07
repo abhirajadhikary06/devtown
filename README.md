@@ -39,6 +39,9 @@ gets a new URL whenever the user's local-time lighting period changes.
 The Community world renders every saved city as a 3D plot arranged beside the other plots.
 After GitHub analysis, new accounts default to an automatically placed starter town based on the profile plan.
 Users can choose manual setup instead and place buildings themselves.
+In the Studio, **Auto Build town** deliberately clears the current layout and rebuilds it from scratch using the
+coins and materials currently available. It favors the highest affordable population density, keeps profile-specific
+buildings as tie-breakers, and does not spend energy or reputation. The action is confirmed before it runs.
 
 ## Architecture (modular monolith)
 
