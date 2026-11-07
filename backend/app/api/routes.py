@@ -368,11 +368,7 @@ def banner_info(user: User = Depends(current_user), db: Session = Depends(get_db
     revision = banner_revision(row.version, mode)
     url = f"{base}/api/banners/{user.login}.png"
     versioned_url = f"{url}?mode={mode}&v={revision}"
-    markdown = (
-        f'<a href="{base}/@{user.login}">'
-        f'<img src="{versioned_url}" alt="My DevTown" width="100%" />'
-        f"</a>"
-    )
+    markdown = f"[![My DevTown]({versioned_url})]({base}/@{user.login})"
     return {"version": revision, "image_url": url, "versioned_url": versioned_url, "profile_url": f"{base}/@{user.login}",
             "markdown": markdown, "width": 1734, "height": 574, "display_width": 514, "display_height": 170,
             "lighting": preference, "resolved_mode": mode}
