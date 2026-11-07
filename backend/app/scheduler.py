@@ -7,7 +7,9 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 
 from .api import services as svc
+from .config import settings
 from .db import SessionLocal
+from .github.readme import sync_banner
 from .lighting import resolve_mode
 from .models import City, Snapshot, User
 
@@ -45,6 +47,13 @@ def _run_due_transitions() -> int:
             city.data = data
             city.version += 1
             svc.auto_build(db, city, user.id, snapshot.analysis["plan"])
+            mode_code = mode
+            base = settings.public_base_url.rstrip("/")
+            banner_url = f"{base}/api/banners/{user.login}.png?mode={mode_code}&v={city.version}"
+            try:
+                sync_banner(f"[![My DevTown]({banner_url})]({base}/@{user.login})")
+            except Exception:
+                logger.exception("README sync failed for %s", user.login)
             ran += 1
         db.commit()
     return ran

@@ -18,6 +18,10 @@ services:
         sync: false
       - key: GITHUB_SEED_TOKEN
         sync: false
+      - key: GITHUB_README_TOKEN
+        sync: false
+      - key: GITHUB_README_REPOSITORY
+        sync: false
       - key: FRONTEND_URL
         sync: false
       - key: PUBLIC_BASE_URL
