@@ -51,7 +51,11 @@ def _run_due_transitions() -> int:
             base = settings.public_base_url.rstrip("/")
             banner_url = f"{base}/api/banners/{user.login}.png?mode={mode_code}&v={city.version}"
             try:
-                sync_banner(f"[![My DevTown]({banner_url})]({base}/@{user.login})")
+                sync_banner(
+                    f'<a href="{base}/@{user.login}">'
+                    f'<img src="{banner_url}" alt="My DevTown" width="100%" />'
+                    f"</a>"
+                )
             except Exception:
                 logger.exception("README sync failed for %s", user.login)
             ran += 1

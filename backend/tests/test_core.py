@@ -141,7 +141,7 @@ def test_build_charges_resources_blocks_collisions_and_bumps_version(client):
     assert client.post("/api/me/city/items", json={"type": "ai_lab", "x": spot[0], "z": spot[1], "rot": 0}).status_code == 409  # locked
     assert client.get("/api/cities/alice").json()["version"] == v0 + 1
     banner = client.get("/api/me/banner").json()
-    assert banner["markdown"].startswith("[![My DevTown](") and banner["markdown"].endswith("/@alice)")
+    assert '<img src="' in banner["markdown"] and 'width="100%"' in banner["markdown"]
 
 
 def test_auto_build_replaces_layout_and_uses_available_resources(client):
