@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { ApiError, api, post } from "../api";
 import CityCanvas, { Tool, type LightingMode } from "../components/CityCanvas";
 import { LightingPicker, Wordmark } from "../components/Shell";
+import { automaticLighting, timezone, type LightingPreference } from "../lighting";
 import type { Analysis, Balances, Building, City, Item } from "../types";
 
 const RES: [keyof Balances, string][] = [["energy", "Energy"], ["coins", "Coins"], ["materials", "Materials"], ["reputation", "Reputation"]];
@@ -20,10 +21,14 @@ export default function Studio() {
   const [rot, setRot] = useState(0);
   const [autoRotateView, setAutoRotateView] = useState(false);
   const [viewAngle, setViewAngle] = useState(45);
-  const [lightingMode, setLightingMode] = useState<LightingMode>("day");
+  const [lightingPreference, setLightingPreference] = useState<LightingPreference>("auto");
+  const lightingMode: LightingMode = lightingPreference === "auto" ? automaticLighting() : lightingPreference;
+  const [, refreshLighting] = useState(0);
+  useEffect(() => { const timer = window.setInterval(() => refreshLighting((n) => n + 1), 60_000); return () => window.clearInterval(timer); }, []);
   const [msg, setMsg] = useState("");
   const [panel, setPanel] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [autoBuild, setAutoBuild] = useState(true);
 
   const load = useCallback(async (u: string) => {
     const [c, k, p] = await Promise.all([api<City>(`/cities/${u}`), api<Building[]>("/catalogue"), api<{ analysis: Analysis | null; balances: Balances }>("/me/profile")]);
@@ -36,6 +41,17 @@ export default function Studio() {
       m.has_city ? load(m.login) : setState("analyze");
     }).catch((e: ApiError) => setState(e.status === 401 ? "signin" : "signin"));
   }, [load]);
+
+  useEffect(() => {
+    if (!city) return;
+    api<{ mode: LightingPreference; timezone: string }>("/me/lighting").then((p) => setLightingPreference(p.mode)).catch(() => {});
+  }, [city]);
+
+  const changeLighting = (mode: LightingPreference) => {
+    setLightingPreference(mode);
+    api("/me/lighting", { method: "PATCH", body: JSON.stringify({ mode, timezone: timezone() }) })
+      .catch((e) => setMsg(`Could not save lighting: ${(e as Error).message}`));
+  };
 
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
@@ -56,7 +72,13 @@ export default function Studio() {
 
   const analyze = async () => {
     setBusy(true); setMsg("");
-    try { await post("/me/sync"); await load(login); } catch (e) { setMsg((e as Error).message); }
+    try {
+      const result = await post<{ built_structures?: number; deferred_buildings?: number }>("/me/sync", { auto_build: autoBuild });
+      await load(login);
+      setMsg(autoBuild
+        ? `Your town was auto-built with ${result.built_structures ?? 0} structures${result.deferred_buildings ? `; ${result.deferred_buildings} did not fit yet.` : "."}`
+        : "Your town is ready for manual building.");
+    } catch (e) { setMsg((e as Error).message); }
     setBusy(false);
   };
   const place = async (x: number, z: number) => {
@@ -86,7 +108,17 @@ export default function Studio() {
       <a className="btn btn-accent mt-5" href="/api/auth/github/login">Connect GitHub</a> <Link className="btn btn-ghost mt-5" to="/u/demo">Explore the demo</Link></div>);
   if (state === "analyze") return (
     <div className="mx-auto max-w-md p-8"><Wordmark /><h1 className="mt-6 text-3xl font-bold">Hi {login}. Ready to see your city?</h1>
-      <p className="mt-2 text-ink/75">We will read your languages, repositories, pull requests and open-source work, then lay out a starter city. This takes about a minute.</p>
+      <p className="mt-2 text-ink/75">We will read your languages, repositories, pull requests and open-source work, then prepare your city. This takes about a minute.</p>
+      <div className="mt-5 grid gap-2" role="group" aria-label="City setup mode">
+        <button type="button" aria-pressed={autoBuild} onClick={() => setAutoBuild(true)}
+          className={`rounded-xl border p-3 text-left ${autoBuild ? "border-plum bg-mist" : "border-ink/10"}`}>
+          <b>Auto-build my town</b><span className="mt-1 block text-sm text-ink/65">Place a starter layout based on your GitHub profile.</span>
+        </button>
+        <button type="button" aria-pressed={!autoBuild} onClick={() => setAutoBuild(false)}
+          className={`rounded-xl border p-3 text-left ${!autoBuild ? "border-plum bg-mist" : "border-ink/10"}`}>
+          <b>Build manually</b><span className="mt-1 block text-sm text-ink/65">Start with an empty plot and place everything yourself.</span>
+        </button>
+      </div>
       <button className="btn btn-accent mt-5" onClick={analyze} disabled={busy}>{busy ? "Analyzing your GitHub…" : "Analyze my GitHub"}</button>
       {msg && <p role="alert" className="mt-3 text-red-700">{msg}</p>}</div>);
 
@@ -115,7 +147,7 @@ export default function Studio() {
               className={`btn w-full ${autoRotateView ? "btn-primary" : "btn-ghost"}`}>
               Auto rotate town: {autoRotateView ? "On" : "Off"}
             </button>
-            <LightingPicker value={lightingMode} onChange={setLightingMode} />
+            <LightingPicker value={lightingPreference} onChange={changeLighting} />
             <div className="flex items-center justify-between rounded-md bg-mist px-3 py-2 text-sm" aria-live="polite">
               <span>View direction</span>
               <span className="flex items-center gap-2"><span className="inline-block text-lg transition-transform" style={{ transform: `rotate(${viewAngle}deg)` }}>↑</span><b>{autoRotateView ? `Orbiting · ${viewAngle}°` : `${viewAngle}°`}</b></span>

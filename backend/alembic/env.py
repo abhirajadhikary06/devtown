@@ -1,5 +1,5 @@
 from alembic import context
-from sqlalchemy import engine_from_config, pool
+from sqlalchemy import engine_from_config, pool, text
 
 from app import models  # noqa: F401
 from app.config import settings
@@ -15,8 +15,14 @@ def run():
         with context.begin_transaction():
             context.run_migrations()
         return
-    engine = engine_from_config(config.get_section(config.config_ini_section), prefix="sqlalchemy.", poolclass=pool.NullPool)
+    engine = engine_from_config(
+        config.get_section(config.config_ini_section),
+        prefix="sqlalchemy.",
+        poolclass=pool.NullPool,
+    )
     with engine.connect() as conn:
+        if not settings.database_url.startswith("sqlite"):
+            conn.execute(text("SET search_path TO public"))
         context.configure(connection=conn, target_metadata=Base.metadata)
         with context.begin_transaction():
             context.run_migrations()

@@ -16,12 +16,17 @@ from ..world.catalogue import BASE_UNLOCKS, BUILDINGS, FREE
 
 
 # ---------- city construction
-def new_city_data(snapshot: dict, analysis: dict, seed: int) -> dict:
+def new_city_data(snapshot: dict, analysis: dict, seed: int, auto_build: bool = True) -> dict:
     act = analysis["activity"]
-    limit = 10 + 4 * act["level"]
-    items, deferred, nid = gen.place_starter(seed, analysis["plan"], gen.STARTER_CHUNKS, limit, act["streetlights"], act["milestone_markers"])
+    if auto_build:
+        # Auto-build uses the complete profile plan. The generator still skips
+        # buildings that cannot fit, preserving a valid deterministic layout.
+        items, deferred, nid = gen.place_starter(seed, analysis["plan"], gen.STARTER_CHUNKS, 0, act["streetlights"], act["milestone_markers"])
+    else:
+        items, deferred, nid = [], analysis["plan"], 1
     return {"unlocked": [list(c) for c in gen.STARTER_CHUNKS], "items": items, "next_id": nid, "unlocks": analysis["unlocks"],
-            "level": act["level"], "deferred": deferred, "lighting": dict(DEFAULT_PREFERENCES)}
+            "level": act["level"], "deferred": deferred, "lighting": dict(DEFAULT_PREFERENCES),
+            "auto_build": auto_build}
 
 
 @lru_cache
@@ -172,13 +177,19 @@ def _commit(row: City, d: dict):
 
 
 # ---------- banner cache
+@lru_cache(maxsize=32)
+def _render_banner_cached(payload: str, mode: str) -> bytes:
+    return render_banner(json.loads(payload), mode)
+
+
 def banner_png(db: Session, row: City, force: bool = False, lighting_mode: str | None = None) -> bytes:
     mode = lighting_mode or resolve_mode(row.data.get("lighting"))
     render_version = banner_revision(row.version, mode)
     b = db.get(Banner, row.id)
     if b and b.version == render_version and not force:
         return b.png
-    png = render_banner(city_dict(row), mode)
+    payload = json.dumps(city_dict(row), sort_keys=True, separators=(",", ":"))
+    png = _render_banner_cached(payload, mode)
     if b:
         b.version, b.png = render_version, png
     else:

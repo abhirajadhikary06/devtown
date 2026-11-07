@@ -10,4 +10,4 @@ export type Analysis = {
   data_quality: { unavailable: string[]; inferred: string[]; notes: string[] };
   plan: { building: string; reason: string }[];
 };
-export type BannerInfo = { version: number; image_url: string; versioned_url: string; profile_url: string; markdown: string; width: number; height: number; display_width: number; display_height: number };
+export type BannerInfo = { version: number; image_url: string; versioned_url: string; profile_url: string; markdown: string; width: number; height: number; display_width: number; display_height: number; resolved_mode?: string };

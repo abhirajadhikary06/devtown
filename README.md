@@ -16,9 +16,29 @@ cd frontend && npm install && npm run dev      # http://localhost:5173
 The demo city (`/u/demo`, `/api/banners/demo.png`) works with no configuration.
 To enable "Connect GitHub", create a GitHub OAuth App (callback `http://localhost:5173/api/auth/github/callback`)
 and set `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` in `backend/.env` (see `.env.example`).
-Production: PostgreSQL + `alembic upgrade head` (`docker compose up` does this), and serve the SPA with a fallback to
+Production: Neon PostgreSQL + `alembic upgrade head` (the backend container runs this on startup), and serve the SPA with a fallback to
 `index.html` so `/@username` resolves. Set `PUBLIC_BASE_URL` to your domain; it is used in the copied Markdown.
 Tests: `cd backend && pytest`.
+
+### Production deployment
+
+Use Docker Compose to run the backend container. PostgreSQL is hosted by Neon; the Compose file intentionally does
+not start a local database service. Configure `backend/.env`'s `DATABASE_URL` with Neon's pooled connection string
+(`NEON_DATABASE_URL` is not read by the application).
+The existing `backend/Dockerfile` runs `alembic upgrade head` before starting Uvicorn.
+Deploy `frontend` as a Vite site on Netlify and proxy `/api/*` to the Render backend so the existing relative API
+URLs and GitHub OAuth cookies continue to work. Add the `/api/*` rewrite in Netlify after Render gives you the
+backend URL; the committed `netlify.toml` contains the SPA fallback. Set `FRONTEND_URL`, `PUBLIC_BASE_URL`,
+`COOKIE_SECURE=true`, and the production secrets in Render. The GitHub OAuth callback must be
+`https://<api-domain>/api/auth/github/callback`.
+
+Lighting supports Auto, Day, Dusk, and Night. Auto stores the user's IANA timezone and changes the studio and
+banner between day (06:00-18:00), dusk (18:00-21:00), and night. README banner responses expose the resolved lighting mode and a mode-specific versioned preview URL. The copied
+Markdown includes that mode and revision, so manually selecting Night or Dusk is reflected immediately, while Auto
+gets a new URL whenever the user's local-time lighting period changes.
+The Community world renders every saved city as a 3D plot arranged beside the other plots.
+After GitHub analysis, new accounts default to an automatically placed starter town based on the profile plan.
+Users can choose manual setup instead and place buildings themselves.
 
 ## Architecture (modular monolith)
 

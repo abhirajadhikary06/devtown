@@ -1,9 +1,9 @@
-"""Dedicated server-side banner camera: fixed isometric composition + fixed golden-hour lighting.
+"""Dedicated server-side banner camera with selectable day, dusk, and night lighting.
 Pure Pillow (no GPU / browser needed) so it is reliable inside any container. Output is exactly 1734x574 PNG."""
 import io
 import math
 
-from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
+from PIL import Image, ImageChops, ImageDraw, ImageEnhance, ImageFilter, ImageFont
 
 from ..world.catalogue import BUILDINGS, footprint
 from ..world.generator import BRIDGE, FOREST, GRASS, ROAD, SAND, WATER, TileMap, hash01
@@ -41,7 +41,7 @@ def _view_items(city):
     return city.get("items", [])
 
 
-def render_banner(city: dict) -> bytes:
+def render_banner(city: dict, mode: str = "day") -> bytes:
     seed, unlocked = city["seed"], city["unlocked"]
     tm = TileMap(seed, unlocked)
     items = _view_items(city)
@@ -67,14 +67,20 @@ def render_banner(city: dict) -> bytes:
     # ---- sky
     img = Image.new("RGB", (cw, ch))
     d = ImageDraw.Draw(img)
-    top, mid, hor = (38, 52, 104), (126, 104, 156), (244, 170, 112)
+    palettes = {
+        "day": ((104, 170, 218), (185, 218, 228), (244, 248, 238)),
+        "dusk": ((38, 52, 104), (126, 104, 156), (244, 170, 112)),
+        "night": ((8, 15, 38), (28, 44, 78), (74, 91, 135)),
+    }
+    top, mid, hor = palettes.get(mode, palettes["day"])
     for y in range(ch):
         t = y / ch
         d.line([(0, y), (cw, y)], fill=_mix(top, mid, t / .45) if t < .45 else _mix(mid, hor, min(1, (t - .45) / .4)))
-    glow = Image.new("RGB", (cw, ch), (0, 0, 0))
-    ImageDraw.Draw(glow).ellipse([cw * .72, ch * .02, cw * .9, ch * .38], fill=(255, 200, 130))
-    glow = glow.filter(ImageFilter.GaussianBlur(ch * .12))
-    img = ImageChops.add(img, glow.point(lambda v: int(v * .55)))
+    if mode != "night":
+        glow = Image.new("RGB", (cw, ch), (0, 0, 0))
+        ImageDraw.Draw(glow).ellipse([cw * .72, ch * .02, cw * .9, ch * .38], fill=(255, 200, 130))
+        glow = glow.filter(ImageFilter.GaussianBlur(ch * .12))
+        img = ImageChops.add(img, glow.point(lambda v: int(v * (.28 if mode == "day" else .55))))
     d = ImageDraw.Draw(img, "RGBA")
 
     # ---- ground (painter's order by x+z)
@@ -140,11 +146,18 @@ def render_banner(city: dict) -> bytes:
             continue
         _box(d, P, it["x"], it["z"], w, dd, b, tw, u, hash01(seed, it["x"], it["z"], 11))
 
+    # Apply the selected lighting to the whole scene, not only the sky.
+    brightness = {"day": 1.0, "dusk": 0.72, "night": 0.38}.get(mode, 1.0)
+    if brightness != 1.0:
+        img = ImageEnhance.Brightness(img).enhance(brightness)
+
     # ---- evening light wash + vignette
-    wash = Image.new("RGBA", (cw, ch), (255, 170, 110, 0))
+    wash_color = {"day": (255, 255, 255), "dusk": (255, 150, 90), "night": (70, 90, 150)}.get(mode, (255, 255, 255))
+    wash = Image.new("RGBA", (cw, ch), (*wash_color, 0))
     wd = ImageDraw.Draw(wash)
     for i in range(0, ch, 4):
-        wd.rectangle([0, i, cw, i + 4], fill=(255, 150, 90, int(34 * (i / ch))))
+        alpha = 8 if mode == "day" else 34 if mode == "dusk" else 12
+        wd.rectangle([0, i, cw, i + 4], fill=(*wash_color, int(alpha * (i / ch))))
     img = Image.alpha_composite(img.convert("RGBA"), wash)
 
     # ---- overlay text

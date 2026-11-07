@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { api } from "../api";
 import CityCanvas, { type LightingMode } from "../components/CityCanvas";
 import { LightingPicker, Page } from "../components/Shell";
+import { automaticLighting, type LightingPreference } from "../lighting";
 import type { Building, City } from "../types";
 
 export default function CityPage() {
@@ -13,7 +14,10 @@ export default function CityPage() {
   const [err, setErr] = useState("");
   const [autoRotateView, setAutoRotateView] = useState(false);
   const [viewAngle, setViewAngle] = useState(45);
-  const [lightingMode, setLightingMode] = useState<LightingMode>("day");
+  const [lightingPreference, setLightingPreference] = useState<LightingPreference>("auto");
+  const lightingMode: LightingMode = lightingPreference === "auto" ? automaticLighting() : lightingPreference;
+  const [, refreshLighting] = useState(0);
+  useEffect(() => { const timer = window.setInterval(() => refreshLighting((n) => n + 1), 60_000); return () => window.clearInterval(timer); }, []);
   useEffect(() => {
     if (!username) return;
     api<City>(`/cities/${username}`).then(setCity).catch((e) => setErr(e.message));
@@ -30,7 +34,7 @@ export default function CityPage() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <span className="rounded-md bg-mist px-3 py-2 text-sm text-ink/75" aria-live="polite">View {viewAngle}°</span>
-          <LightingPicker value={lightingMode} onChange={setLightingMode} />
+          <LightingPicker value={lightingPreference} onChange={setLightingPreference} />
           <button type="button" aria-pressed={autoRotateView} onClick={() => setAutoRotateView((enabled) => !enabled)}
             className={`btn ${autoRotateView ? "btn-primary" : "btn-ghost"}`}>
             Auto rotate: {autoRotateView ? "On" : "Off"}

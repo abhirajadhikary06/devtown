@@ -15,6 +15,7 @@ from ..config import settings
 from ..db import SessionLocal, get_db
 from ..github.client import GitHubClient
 from ..github.ingest import collect_snapshot
+from ..lighting import DEFAULT_PREFERENCES, MODES, banner_revision, resolve_mode
 from ..mapping.engine import analyse
 from ..models import City, Snapshot, User
 from ..world import generator as gen
@@ -87,8 +88,12 @@ def me(user: User = Depends(current_user), db: Session = Depends(get_db)):
 
 
 # ---------- analysis
+class SyncIn(BaseModel):
+    auto_build: bool = True
+
+
 @router.post("/me/sync")
-async def sync(user: User = Depends(current_user), db: Session = Depends(get_db)):
+async def sync(body: SyncIn = SyncIn(), user: User = Depends(current_user), db: Session = Depends(get_db)):
     client = GitHubClient(security.decrypt(user.token_enc))
     try:
         snap = await collect_snapshot(client, user.login, is_self=True, force=True)
@@ -103,7 +108,7 @@ async def sync(user: User = Depends(current_user), db: Session = Depends(get_db)
     if not row:
         seed = gen.seed_from(user.login)
         row = City(user_id=user.id, username=user.login, name=f"{user.name or user.login}'s DevTown"[:80], seed=seed,
-                   gen_version=gen.GEN_VERSION, version=1, data=svc.new_city_data(snap, an, seed))
+                   gen_version=gen.GEN_VERSION, version=1, data=svc.new_city_data(snap, an, seed, body.auto_build))
         db.add(row)
     else:  # never regenerate over user edits; only widen unlocks and level
         d = dict(row.data)
@@ -111,7 +116,9 @@ async def sync(user: User = Depends(current_user), db: Session = Depends(get_db)
         row.data = d
         row.version += 1
     db.commit()
-    return {"granted_entries": granted, "level": row.data["level"], "balances": svc.balances(db, user.id), "analysis": _public(an)}
+    return {"granted_entries": granted, "level": row.data["level"], "balances": svc.balances(db, user.id),
+            "auto_build": row.data.get("auto_build", True), "built_structures": len(row.data.get("items", [])),
+            "deferred_buildings": len(row.data.get("deferred", [])), "analysis": _public(an)}
 
 
 def _public(an):
@@ -127,6 +134,32 @@ def profile(user: User = Depends(current_user), db: Session = Depends(get_db)):
         db.commit()
     return {"balances": svc.balances(db, user.id), "analysis": _public(s.analysis) if s else None,
             "fetched_at": s.data["fetched_at"] if s else None}
+
+
+class LightingIn(BaseModel):
+    mode: str = "auto"
+    timezone: str = "UTC"
+
+
+@router.patch("/me/lighting")
+def update_lighting(b: LightingIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    if b.mode not in MODES:
+        raise HTTPException(422, "Lighting mode must be auto, day, dusk, or night")
+    row = my_city(user, db)
+    data = dict(row.data)
+    lighting = {"mode": b.mode, "timezone": b.timezone[:80]}
+    if data.get("lighting") == lighting:
+        return lighting
+    data["lighting"] = lighting
+    row.data = data
+    row.version += 1
+    db.commit()
+    return data["lighting"]
+
+
+@router.get("/me/lighting")
+def get_lighting(user: User = Depends(current_user), db: Session = Depends(get_db)):
+    return my_city(user, db).data.get("lighting", dict(DEFAULT_PREFERENCES))
 
 
 # ---------- cities (public read)
@@ -282,8 +315,11 @@ def rename(b: RenameIn, bg: BackgroundTasks, user: User = Depends(current_user),
 @router.get("/banners/{username}.png")
 async def banner(username: str, request: Request, v: int | None = None, db: Session = Depends(get_db)):
     if username.lower() == "demo":
-        png = await run_in_threadpool(lambda: render_banner(svc.city_dict_from_demo()))
-        ver = 1
+        mode = request.query_params.get("mode", "day")
+        if mode not in ("day", "dusk", "night"):
+            mode = "day"
+        png = await run_in_threadpool(lambda: render_banner(svc.city_dict_from_demo(), mode))
+        ver = banner_revision(1, mode)
     else:
         row = db.scalar(select(City).where(City.username.ilike(username)))
         if not row and username.lower() == sc.HOMEPAGE_PROFILE:
@@ -296,9 +332,13 @@ async def banner(username: str, request: Request, v: int | None = None, db: Sess
             png = await run_in_threadpool(lambda: render_banner({"username": username, "name": "DevTown", "level": 1, "seed": gen.seed_from(username),
                                                                  "unlocked": gen.STARTER_CHUNKS, "items": []}))
             return Response(png, media_type="image/png", status_code=404, headers={"Cache-Control": "public, max-age=60"})
-        png = await run_in_threadpool(svc.banner_png, db, row)
-        ver = row.version
-    cache = "public, max-age=31536000, immutable" if v == ver else "public, max-age=300, stale-while-revalidate=86400"
+        requested_mode = request.query_params.get("mode")
+        mode = requested_mode if requested_mode in ("day", "dusk", "night") else resolve_mode(row.data.get("lighting"))
+        png = await run_in_threadpool(svc.banner_png, db, row, False, mode)
+        ver = banner_revision(row.version, mode)
+    legacy_version = v == (1 if username.lower() == "demo" else row.version)
+    immutable = v == ver or (legacy_version and "mode" not in request.query_params)
+    cache = "public, max-age=31536000, immutable" if immutable else "public, max-age=300, stale-while-revalidate=86400"
     return Response(png, media_type="image/png", headers={"Cache-Control": cache, "ETag": f'"{ver}"',
                                                           "Content-Disposition": f'inline; filename="devtown-{username}.png"'})
 
@@ -307,9 +347,14 @@ async def banner(username: str, request: Request, v: int | None = None, db: Sess
 def banner_info(user: User = Depends(current_user), db: Session = Depends(get_db)):
     row = my_city(user, db)
     base = settings.public_base_url.rstrip("/")
+    preference = row.data.get("lighting", dict(DEFAULT_PREFERENCES))
+    mode = resolve_mode(preference)
+    revision = banner_revision(row.version, mode)
     url = f"{base}/api/banners/{user.login}.png"
-    return {"version": row.version, "image_url": url, "versioned_url": f"{url}?v={row.version}", "profile_url": f"{base}/@{user.login}",
-            "markdown": f"[![My DevTown]({url})]({base}/@{user.login})", "width": 1734, "height": 574, "display_width": 514, "display_height": 170}
+    versioned_url = f"{url}?mode={mode}&v={revision}"
+    return {"version": revision, "image_url": url, "versioned_url": versioned_url, "profile_url": f"{base}/@{user.login}",
+            "markdown": f"[![My DevTown]({versioned_url})]({base}/@{user.login})", "width": 1734, "height": 574, "display_width": 514, "display_height": 170,
+            "lighting": preference, "resolved_mode": mode}
 
 
 @router.post("/me/banner/regenerate")
@@ -350,7 +395,7 @@ def community_world(db: Session = Depends(get_db)):
         total_land += len(chunks); total_structures += len(buildings)
         towns.append({"username": city_row.username, "name": city_row.name, "level": data.get("level", 1),
                       "land_count": len(chunks), "structures": len(buildings), "width": width, "depth": depth,
-                      "buildings": buildings})
+                      "buildings": buildings, "city": svc.view_payload(svc.city_dict(city_row))})
     return {"town_count": len(towns), "land_count": total_land, "structure_count": total_structures, "towns": towns}
 
 

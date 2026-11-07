@@ -1,6 +1,6 @@
 import { useState, type FormEvent, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import type { LightingMode } from "./CityCanvas";
+import type { LightingPreference } from "../lighting";
 
 export function Wordmark() {
   return <Link to="/" className="font-display text-xl font-bold tracking-tight text-ink">DevTown</Link>;
@@ -19,12 +19,12 @@ export function TownSearch() {
     <button className="flex h-10 w-12 shrink-0 items-center justify-center rounded-lg bg-marigold font-display text-2xl font-bold leading-none text-ink hover:brightness-95 focus-visible:outline-none" type="submit" aria-label="Find town" title="Find town">→</button>
   </form>;
 }
-export function LightingPicker({ value, onChange }: { value: LightingMode; onChange: (mode: LightingMode) => void }) {
-  const modes: [LightingMode, string][] = [["day", "Day"], ["dusk", "Dusk"], ["night", "Night"]];
+export function LightingPicker({ value, onChange }: { value: LightingPreference; onChange: (mode: LightingPreference) => void }) {
+  const modes: [LightingPreference, string][] = [["auto", "Auto"], ["day", "Day"], ["dusk", "Dusk"], ["night", "Night"]];
   return <div className="flex items-center justify-between gap-2 rounded-lg bg-mist p-1" role="group" aria-label="Map lighting">
     <span className="px-2 text-xs font-semibold text-ink/65">Lighting</span>
-    <div className="flex gap-1">{modes.map(([mode, label]) => <button key={mode} type="button" aria-pressed={value === mode}
-      onClick={() => onChange(mode)} className={`rounded-md px-2.5 py-1.5 text-xs font-semibold transition ${value === mode ? "bg-white text-ink shadow-sm" : "text-ink/60 hover:bg-white/60"}`}>
+    <div className="flex min-w-0 flex-1 gap-1">{modes.map(([mode, label]) => <button key={mode} type="button" aria-pressed={value === mode}
+      onClick={() => onChange(mode)} className={`min-w-0 flex-1 whitespace-nowrap rounded-md px-1.5 py-1.5 text-xs font-semibold transition ${value === mode ? "bg-white text-ink shadow-sm" : "text-ink/60 hover:bg-white/60"}`}>
       {label}</button>)}</div>
   </div>;
 }

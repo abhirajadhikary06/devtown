@@ -3,9 +3,10 @@ import { Canvas, ThreeEvent, useFrame } from "@react-three/fiber";
 import { ReactNode, useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import type { Building, City, Item } from "../types";
+import type { LightingMode } from "../lighting";
+export type { LightingMode } from "../lighting";
 
 export type Tool = "view" | "build" | "demolish" | "expand";
-export type LightingMode = "day" | "dusk" | "night";
 const LIGHTING = {
   day: { background: "#d5e5ed", fog: "#d5e5ed", sky: "#f4fbff", ground: "#77836c", hemi: 0.9, ambient: 0.5, key: "#fff0d4", keyPower: 2, fill: "#c5e9ff", fillPower: 0.65 },
   dusk: { background: "#bb8d88", fog: "#bb8d88", sky: "#ffd3a3", ground: "#4b6857", hemi: 0.72, ambient: 0.42, key: "#ffb978", keyPower: 1.35, fill: "#978ce0", fillPower: 0.48 },

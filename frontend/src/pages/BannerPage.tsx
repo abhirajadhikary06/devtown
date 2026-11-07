@@ -33,7 +33,7 @@ export default function BannerPage() {
       <p className="mt-2 max-w-xl text-ink/75">Drawn from your saved city. It updates after you change your city, so the embedded image never goes stale.</p>
       {info && <>
         <img src={info.versioned_url} width={info.width} height={info.height} alt="Your DevTown banner" className="mt-6 w-full max-w-4xl rounded-xl shadow-lg ring-1 ring-ink/10" />
-        <p className="mt-2 text-sm text-ink/65">{info.width} × {info.height} PNG. GitHub shows it at about {info.display_width} × {info.display_height}.</p>
+        <p className="mt-2 text-sm text-ink/65">{info.width} × {info.height} PNG. Current lighting: <b className="capitalize">{info.resolved_mode ?? "day"}</b>. GitHub shows it at about {info.display_width} × {info.display_height}.</p>
         <div className="mt-5 flex flex-wrap gap-3">
           <button className="btn btn-accent" onClick={copy}>{copied ? "Copied" : "Copy Markdown"}</button>
           <a className="btn btn-primary" href={info.versioned_url} download={`devtown-banner.png`}>Download PNG</a>

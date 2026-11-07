@@ -4,6 +4,7 @@ from zoneinfo import ZoneInfo
 
 MODES = {"auto", "day", "dusk", "night"}
 DEFAULT_PREFERENCES = {"mode": "auto", "timezone": "UTC"}
+BANNER_RENDERER_VERSION = 2
 
 
 def resolve_mode(preferences: dict | None, now: datetime | None = None) -> str:
@@ -24,4 +25,4 @@ def resolve_mode(preferences: dict | None, now: datetime | None = None) -> str:
 
 
 def banner_revision(city_version: int, mode: str) -> int:
-    return city_version * 10 + {"day": 1, "dusk": 2, "night": 3}[mode]
+    return city_version * 100 + BANNER_RENDERER_VERSION * 10 + {"day": 1, "dusk": 2, "night": 3}[mode]

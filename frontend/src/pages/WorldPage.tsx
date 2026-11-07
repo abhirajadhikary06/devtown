@@ -1,22 +1,27 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ApiError, api } from "../api";
+import CityCanvas from "../components/CityCanvas";
 import { Page } from "../components/Shell";
+import type { Building, City } from "../types";
 
 type Town = {
   username: string; name: string; level: number; land_count: number; structures: number;
   width: number; depth: number;
   buildings: { x: number; z: number; w: number; d: number; color: string }[];
+  city: City;
 };
 type World = { town_count: number; land_count: number; structure_count: number; towns: Town[] };
 
 export default function WorldPage() {
   const [world, setWorld] = useState<World | null>(null);
+  const [catalogue, setCatalogue] = useState<Building[]>([]);
   const [error, setError] = useState("");
   useEffect(() => {
     api<World>("/world").then(setWorld).catch((e: ApiError) => setError(e.status === 404
       ? "The running backend has not loaded the community-world route yet. Restart the backend, then reload this page."
       : e.message));
+    api<Building[]>("/catalogue").then(setCatalogue).catch(() => {});
   }, []);
 
   return <Page wide>
@@ -48,24 +53,12 @@ export default function WorldPage() {
           <span className="font-normal text-[#263d35]/70">· roads extend as more towns join</span>
         </div>
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {world.towns.map((town) => <Link key={town.username} to={`/u/${encodeURIComponent(town.username)}`}
-            className="group overflow-hidden rounded-2xl border border-white/80 bg-[#eef1e7] shadow-md transition hover:-translate-y-1 hover:shadow-xl focus-visible:outline-offset-4">
-            <div className="relative aspect-[4/3] overflow-hidden border-b border-[#52645a]/20 bg-[#9fc28b]">
-              <div className="absolute inset-0 town-parcel-grid" />
-              <div className="absolute inset-[8%] rounded-lg border-2 border-white/60 bg-[#c6d8ad]/80 shadow-inner">
-                <div className="absolute left-1/2 top-0 h-full w-[7%] -translate-x-1/2 bg-[#65737a]">
-                  <div className="absolute left-1/2 top-0 h-full border-l border-dashed border-[#eee8cd]/80" />
-                </div>
-                <div className="absolute left-0 top-1/2 h-[7%] w-full -translate-y-1/2 bg-[#65737a]">
-                  <div className="absolute left-0 top-1/2 w-full border-t border-dashed border-[#eee8cd]/80" />
-                </div>
-                {town.buildings.map((b, i) => <span key={i} className="absolute z-10 rounded-[2px] border border-black/20 shadow-sm transition group-hover:brightness-110"
-                  style={{ left: `${(b.x / town.width) * 100}%`, top: `${(b.z / town.depth) * 100}%`,
-                    width: `${Math.max((b.w / town.width) * 100, 2.5)}%`, height: `${Math.max((b.d / town.depth) * 100, 2.5)}%`,
-                    background: b.color, boxShadow: "inset 0 -3px 0 #0002, 1px 2px 2px #0003" }} />)}
-                {town.buildings.length === 0 && <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/85 px-3 py-1 text-xs font-semibold text-[#34483b]">New neighborhood</span>}
-              </div>
-              <span className="absolute right-3 top-3 rounded-full bg-white/90 px-2.5 py-1 text-xs font-bold text-[#263d35]">Level {town.level}</span>
+          {world.towns.map((town, index) => <Link key={town.username} to={`/u/${encodeURIComponent(town.username)}`}
+            className="group overflow-hidden rounded-2xl border border-white/80 bg-[#eef1e7] shadow-md transition hover:-translate-y-1 hover:shadow-xl focus-visible:outline-offset-4"
+            style={{ transform: `translateY(${(index * 17) % 3}px)` }}>
+            <div className="h-64 overflow-hidden border-b border-[#52645a]/20 bg-[#9fc28b]">
+              {catalogue.length > 0 && <CityCanvas city={town.city} cat={Object.fromEntries(catalogue.map((b) => [b.id, b]))}
+                tool="view" selected={null} rot={0} lightingMode="day" />}
             </div>
             <div className="flex items-center justify-between gap-3 p-4">
               <div className="min-w-0"><h2 className="truncate font-bold">{town.name}</h2><p className="mt-0.5 text-sm text-ink/60">@{town.username}</p></div>

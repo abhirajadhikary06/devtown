@@ -1,19 +1,5 @@
 services:
-  db:
-    image: postgres:16
-    environment: { POSTGRES_USER: devtown, POSTGRES_PASSWORD: devtown, POSTGRES_DB: devtown }
-    volumes: [pgdata:/var/lib/postgresql/data]
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U devtown -d devtown"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
   api:
     build: ./backend
     env_file: ./backend/.env
-    depends_on:
-      db:
-        condition: service_healthy
     ports: ["8000:8000"]
-volumes:
-  pgdata:
